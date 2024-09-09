@@ -11,3 +11,5 @@ pom.xml.asc
 *.DS_Store
 project.clj
 *.iml
+/.cpcache
+/.rebel_readline_history
