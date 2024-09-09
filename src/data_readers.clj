@@ -1,2 +1,2 @@
-{linked/map linked.map/->linked-map
- linked/set linked.set/->linked-set}
+{bestellt/map bestellt.map/->map
+ bestellt/set bestellt.set/->set}

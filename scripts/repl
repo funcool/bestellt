@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+export JAVA_OPTS="\
+       -Xms50m \
+       -Xmx512m
+       -Djdk.attach.allowAttachSelf \
+       -Djdk.tracePinnedThreads=full \
+       -Djava.net.preferIPv4Stack=true \
+       -XX:+UseG1GC \
+       -XX:+UnlockExperimentalVMOptions \
+       -XX:-OmitStackTraceInFastThrow  \
+       --sun-misc-unsafe-memory-access=allow \
+       --enable-preview \
+       --enable-native-access=ALL-UNNAMED";
+
+export OPTIONS_EVAL="nil"
+
+set -ex
+exec clojure -A:dev -M -e "$OPTIONS_EVAL" -m rebel-readline.main
