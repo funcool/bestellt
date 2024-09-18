@@ -128,16 +128,16 @@
     (t/is (= "#bestellt/map [[1 9] [3 4] [5 6] [7 8]]"
              (pr-str s)))
     (let [o (read-string (pr-str s))]
-      ;; #?(:clj (t/is (bmap/map? o)))
+      #?(:clj (t/is (bmap/map? o)))
       (t/is (= '([1 9] [3 4] [5 6] [7 8])
              (seq o))))))
 
-;; (t/deftest map-entry-test
-;;   (t/is (map-entry? (first (bmap/map 1 2)))))
+(t/deftest map-entry-test
+  (t/is (map-entry? (first (bmap/map 1 2)))))
 
-;; #?(:clj
-;;    (t/deftest java-interop
-;;      (t/is (.isEmpty ^java.util.Map (bmap/map)))
-;;      (t/is (not (.isEmpty ^java.util.Map (bmap/map 1 2))))
-;;      (t/is (= [] (vec (.entrySet ^java.util.Map (bmap/map)))))
-;;      (t/is (= (partition 2 (range 100)) (vec (.entrySet ^java.util.Map (apply bmap/map (range 100))))))))
+#?(:clj
+   (t/deftest java-interop
+     (t/is (.isEmpty ^java.util.Map (bmap/map)))
+     (t/is (not (.isEmpty ^java.util.Map (bmap/map 1 2))))
+     (t/is (= [] (vec (.entrySet ^java.util.Map (bmap/map)))))
+     (t/is (= (partition 2 (range 100)) (vec (.entrySet ^java.util.Map (apply bmap/map (range 100))))))))
