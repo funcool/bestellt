@@ -1,5 +1,5 @@
 (ns bestellt.map
-  (:refer-clojure :exclude [map])
+  (:refer-clojure :exclude [map map?])
   (:require [clojure.string :as string]
             [clojure.core :as c]
             #?(:cljs [cljs.reader :as reader]))
@@ -94,7 +94,8 @@
 (deftype LinkedMap [head delegate]
   #?@(:clj
       [IPersistentMap
-       (assoc [this k v] (assoc* this k v))
+       (assoc [this k v]
+              (assoc* this k v))
        (assocEx [this k v]
                 (if (.containsKey this k)
                   (throw (RuntimeException. "Key already present"))
@@ -154,7 +155,8 @@
        ;;           (reduce* delegate f head last init)))
 
        Seqable
-       (seq [this] (seq* this))
+       (seq [this]
+            (seq* this))
 
        Reversible
        (rseq [this] (rseq* this))
@@ -386,13 +388,14 @@
       (list entry)
       (cons entry (lazy-seq (visit-node delegate next last direction))))))
 
-(defn- seq* [^LinkedMap this]
+(defn- seq*
+  [^LinkedMap this]
   (let [delegate  (.-delegate this)
         head      (.-head this)
-        head-node (get delegate head)
-        tail      (.-l ^Node head-node)]
+        head-node (get delegate head)]
     (when (pos? (.count ^IPersistentMap delegate))
-      (visit-node delegate head tail 1))))
+      (let [tail (.-l ^Node head-node)]
+        (visit-node delegate head tail 1)))))
 
 (defn- rseq*
   [^LinkedMap this]
@@ -402,13 +405,19 @@
     (when (seq delegate)
       (visit-node delegate tail head 0))))
 
-(def ^{:tag LinkedMap} empty-map
+(def empty-map
   (LinkedMap. nil {}))
 
-(def ->map (partial into empty-map))
+(defn ->map
+  [o]
+  (into (LinkedMap. nil {}) o))
 
 (defn map
   ([] empty-map)
   ([& kvpairs] (apply assoc empty-map kvpairs)))
+
+(defn map?
+  [o]
+  (instance? LinkedMap o))
 
 #?(:cljs (reader/register-tag-parser! 'bestellt/map ->map))
