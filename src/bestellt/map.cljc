@@ -31,6 +31,11 @@
 (declare empty-map)
 (declare equiv-sequential)
 
+(defprotocol ILinkedMap
+  "A protocol that defines specific API for map that conserves insertion order"
+  (-assoc-after [_ key k v])
+  (-assoc-before [_ key k v]))
+
 (deftype Node [k v l r]
   #?@(:clj
       [IMapEntry
@@ -423,6 +428,44 @@
                                (assoc k (Node. k v tail head))
                                (update head update-node-left k)
                                (update tail update-node-right k))))))))
+
+(defn- assoc-after*
+  [^LinkedMap this key k v]
+  (let [head     (.-head this)
+        delegate (.-delegate this)]
+    (if (contains? delegate k)
+      (if (contains? delegate key)
+        (let [target-node (get delegate key)
+              income-node (get delegate k)
+              income-node (-> income-node
+                              (update-node-value v)
+                              (update-node-left key)
+                              (update-node-right (.-r target-node)))
+              target-node (update-node-right target-node k)]
+          (LinkedMap. head (-> delegate
+                               (assoc key target-node)
+                               (assoc k income-node))))
+        (if (nil? key)
+          (let [income-node (-> (get delegate k)
+                                (update-node-value v)
+                                (update-node-left (.-l head))
+                                (update-node-right (.-r head)))
+
+          (let [
+
+
+      (LinkedMap. head (update delegate k update-node-value v))
+      (if (empty? delegate)
+        (LinkedMap. k (assoc delegate k (Node. k v k k)))
+        (let [head-node (get delegate head)
+              tail      (.-l ^Node head-node)]
+          (LinkedMap. head (-> delegate
+                               (assoc k (Node. k v tail head))
+                               (update head update-node-left k)
+                               (update tail update-node-right k))))))))
+
+
+
 
 (defn- dissoc*
   [^LinkedMap this k]
