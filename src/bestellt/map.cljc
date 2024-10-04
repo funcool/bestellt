@@ -29,12 +29,13 @@
 #?(:clj (set! *warn-on-reflection* true))
 
 (declare empty-map)
-(declare equiv-sequential)
+(declare ^:private equiv-sequential)
 
 (defprotocol ILinkedMap
   "A protocol that defines specific API for map that conserves insertion order"
-  (-assoc-after [_ key k v])
-  (-assoc-before [_ key k v]))
+  (-assoc-after [_ key k v] "Assoc a new entry after an existing key")
+  (-assoc-before [_ key k v] "Assoc a new entry before an existing key")
+  (-rename-key [_ key k] "Rename a key of a entry respecting the existing order"))
 
 (deftype Node [k v l r]
   #?@(:clj
@@ -145,12 +146,13 @@
 
        ]))
 
-(declare assoc*)
-(declare assoc-after*)
-(declare assoc-before*)
-(declare dissoc*)
-(declare seq*)
-(declare rseq*)
+(declare ^:private assoc*)
+(declare ^:private assoc-after*)
+(declare ^:private assoc-before*)
+(declare ^:private rename-key*)
+(declare ^:private dissoc*)
+(declare ^:private seq*)
+(declare ^:private rseq*)
 
 (deftype LinkedMap [head delegate]
   #?@(:clj
@@ -168,6 +170,7 @@
        ILinkedMap
        (-assoc-after [this key k v] (assoc-after* this key k v))
        (-assoc-before [this key k v] (assoc-before* this key k v))
+       (-rename-key [this key k] (rename-key* this key k))
 
        Map
        (get [this k] (.valAt this k))
@@ -278,8 +281,12 @@
        (toString [coll]
                  (str "{" (string/join ", " (for [[k v] coll] (str k " " v))) "}"))
        (equiv [this other]
-              (prn "equiv")
               (-equiv this other))
+
+       ILinkedMap
+       (-assoc-after [this key k v] (assoc-after* this key k v))
+       (-assoc-before [this key k v] (assoc-before* this key k v))
+       (-rename-key [this key k] (rename-key* this key k))
 
        ICloneable
        (-clone [_]
@@ -397,6 +404,13 @@
                 (= (first xs) (first ys)) (recur (next xs) (next ys))
                 :else false))))))
 
+(defn- update-node-key
+  [^Node node k]
+  (Node. k
+         (.-v node)
+         (.-l node)
+         (.-r node)))
+
 (defn- update-node-value
   [^Node node v]
   (Node. (.-k node) v
@@ -504,7 +518,6 @@
         (if (contains? delegate k)
           (-> (dissoc* this k)
               (assoc-before* key k v))
-
           (let [target-node (get delegate key)
                 tlk         (.-l ^Node target-node)
                 trk         (.-r ^Node target-node)
@@ -513,12 +526,33 @@
                                 (update tlk (fn [node] (update-node-right node k)))
                                 (assoc key (update-node-left target-node k))
                                 (assoc k income-node))
-                head        (if (= key head) key head)]
+                head        (if (= key head) k head)]
             (LinkedMap. head delegate)))
-
         (if (nil? key)
           (assoc* this k v)
           this)))))
+
+(defn- rename-key*
+  [^LinkedMap this key k]
+  (let [delegate (.-delegate this)]
+    (if (or (empty? delegate)
+            (= key k))
+      this
+      (if-let [target-node (some-> (get delegate key)
+                                   (update-node-key k))]
+        (let [tlk      (.-l ^Node target-node)
+              trk      (.-r ^Node target-node)
+              delegate (-> delegate
+                           (dissoc key)
+                           (assoc k target-node)
+                           (update tlk update-node-right k)
+                           (update trk update-node-left k))
+              head     (.-head this)
+              head     (if (= key head)
+                         k
+                         head)]
+          (LinkedMap. head delegate))
+        this))))
 
 ;;;; reduce
 
@@ -575,5 +609,41 @@
 (defn map?
   [o]
   (instance? LinkedMap o))
+
+(defn assoc-after
+  ([m key k v]
+   (-assoc-after m key k v))
+  ([m key k v & kv]
+   (loop [res (-assoc-after m key k v)
+          kv  (seq kv)
+          key k
+          k   nil]
+     (if-let [r (first kv)]
+       (if (nil? k)
+         (recur res (rest kv) key r)
+         (recur (-assoc-after res key k r) (rest kv) k nil))
+       (if (nil? k)
+         res
+         (throw (IllegalArgumentException.
+                 "assoc-after expects even number of arguments")))))))
+
+
+
+;; (defn assoc
+;;   ([m key k v]
+;;    (assoc-after m key k v))
+;;   ([m key k v & kv]
+;;    (loop [res (-assoc-after m key k v)
+;;           kv  (seq kv)
+;;           key k
+;;           k   nil]
+;;      (if-let [r (first kv)]
+;;        (if (nil? k)
+;;          (recur res (rest kv) key r)
+;;          (recur (-assoc-after res key k r) (rest kv) k nil))
+;;        (if (nil? k)
+;;          res
+;;          (throw (IllegalArgumentException.
+;;                  "assoc-after expects even number of arguments")))))))
 
 #?(:cljs (reader/register-tag-parser! 'bestellt/map ->map))
