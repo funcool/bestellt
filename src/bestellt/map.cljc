@@ -614,35 +614,50 @@
   ([m key k v]
    (-assoc-after m key k v))
   ([m key k v & kv]
-   (loop [res (-assoc-after m key k v)
+   (loop [m   (-assoc-after m key k v)
           kv  (seq kv)
           key k
           k   nil]
      (if-let [r (first kv)]
        (if (nil? k)
-         (recur res (rest kv) key r)
-         (recur (-assoc-after res key k r) (rest kv) k nil))
+         (recur m (rest kv) key r)
+         (recur (-assoc-after m key k r) (rest kv) k nil))
        (if (nil? k)
-         res
+         m
          (throw (IllegalArgumentException.
                  "assoc-after expects even number of arguments")))))))
 
 
+(defn assoc-before
+  ([m key k v]
+   (-assoc-before m key k v))
+  ([m key k v & kv]
+   (loop [m  (-assoc-before m key k v)
+          kv (seq kv)
+          k  nil]
+     (if-let [r (first kv)]
+       (if (nil? k)
+         (recur m (rest kv) r)
+         (recur (-assoc-before m key k r) (rest kv) nil))
+       (if (nil? k)
+         m
+         (throw (IllegalArgumentException.
+                 "assoc-before expects even number of arguments")))))))
 
-;; (defn assoc
-;;   ([m key k v]
-;;    (assoc-after m key k v))
-;;   ([m key k v & kv]
-;;    (loop [res (-assoc-after m key k v)
-;;           kv  (seq kv)
-;;           key k
-;;           k   nil]
+
+;; (defn assoc1
+;;   ([m k v]
+;;    (clojure.lang.RT/assoc m k v))
+;;   ([m k v & kv]
+;;    (loop [m  (clojure.lang.RT/assoc m k v)
+;;           kv (seq kv)
+;;           k  nil]
 ;;      (if-let [r (first kv)]
 ;;        (if (nil? k)
-;;          (recur res (rest kv) key r)
-;;          (recur (-assoc-after res key k r) (rest kv) k nil))
+;;          (recur m (rest kv) r)
+;;          (recur (clojure.lang.RT/assoc m k r) (rest kv) nil))
 ;;        (if (nil? k)
-;;          res
+;;          m
 ;;          (throw (IllegalArgumentException.
 ;;                  "assoc-after expects even number of arguments")))))))
 
