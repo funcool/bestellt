@@ -146,6 +146,8 @@
        ]))
 
 (declare assoc*)
+(declare assoc-after*)
+(declare assoc-before*)
 (declare dissoc*)
 (declare seq*)
 (declare rseq*)
@@ -162,6 +164,10 @@
        (without [this k] (dissoc* this k))
 
        MapEquivalence
+
+       ILinkedMap
+       (-assoc-after [this key k v] (assoc-after* this key k v))
+       (-assoc-before [this key k v] (assoc-before* this key k v))
 
        Map
        (get [this k] (.valAt this k))
@@ -374,9 +380,9 @@
      (.write w "#bestellt/map ")
      (.write w (pr-str (into [] xf:map-node-to-vec o)))))
 
-;; #?(:clj
-;;    (defmethod print-method Node [o ^java.io.Writer w]
-;;      (.write w (pr-str [(key o) (val o)]))))
+#?(:clj
+   (defmethod print-method Node [^Node o ^java.io.Writer w]
+     (.write w (pr-str [(key o) (val o) :left (.-l o) :right (.-r o)]))))
 
 (defn- equiv-sequential
   [x y]
@@ -442,7 +448,6 @@
                                (update lk update-node-right rk)))))
       this)))
 
-
 (defn- assoc-after*
   [^LinkedMap this key k v]
   (let [head     (.-head this)
@@ -460,9 +465,14 @@
                 tlk         (.-l ^Node target-node)
                 trk         (.-r ^Node target-node)
                 income-node (Node. k v key trk)
+                target-node (-> target-node
+                                (update-node-right k)
+                                (cond-> (and (= trk head)
+                                             (= key head))
+                                  (update-node-left k)))
                 delegate    (-> delegate
                                 (update trk (fn [node] (update-node-left node k)))
-                                (assoc key (update-node-right target-node k))
+                                (assoc key target-node)
                                 (assoc k income-node))]
             (LinkedMap. head delegate)))
 
@@ -471,9 +481,13 @@
                 tlk         (.-l ^Node target-node)
                 trk         (.-r ^Node target-node)
                 income-node (Node. k v tlk head)
+                target-node (-> target-node
+                                (update-node-left k)
+                                (cond-> (= trk head)
+                                  (update-node-right k)))
                 delegate    (-> delegate
-                                (update trl (fn [node] (update-node-right node k)))
-                                (assoc head (update-node-left target-node k))
+                                (update trk (fn [node] (update-node-right node k)))
+                                (assoc head target-node)
                                 (assoc k income-node))]
             (LinkedMap. k delegate))
           this)))))
@@ -489,30 +503,22 @@
       (if (contains? delegate key)
         (if (contains? delegate k)
           (-> (dissoc* this k)
-              (assoc-after* key k v))
+              (assoc-before* key k v))
 
           (let [target-node (get delegate key)
                 tlk         (.-l ^Node target-node)
                 trk         (.-r ^Node target-node)
-                income-node (Node. k v key trk)
+                income-node (Node. k v tlk key)
                 delegate    (-> delegate
-                                (update trk (fn [node] (update-node-left node k)))
-                                (assoc key (update-node-right target-node k))
-                                (assoc k income-node))]
+                                (update tlk (fn [node] (update-node-right node k)))
+                                (assoc key (update-node-left target-node k))
+                                (assoc k income-node))
+                head        (if (= key head) key head)]
             (LinkedMap. head delegate)))
 
         (if (nil? key)
-          (let [target-node (get delegate head)
-                tlk         (.-l ^Node target-node)
-                trk         (.-r ^Node target-node)
-                income-node (Node. k v tlk head)
-                delegate    (-> delegate
-                                (update trl (fn [node] (update-node-right node k)))
-                                (assoc head (update-node-left target-node k))
-                                (assoc k income-node))]
-            (LinkedMap. k delegate))
+          (assoc* this k v)
           this)))))
-
 
 ;;;; reduce
 
