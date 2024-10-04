@@ -38,15 +38,6 @@
            (test/test-vars [(resolve o)]))
        (test/test-ns o)))))
 
-;; (defn -main
-;;   [& args]
-;;   (require 'promesa.tests.test-core)
-;;   (let [{:keys [fail]} (run-test)]
-;;     (if (pos? fail)
-;;       (System/exit fail)
-;;       (System/exit 0))))
-
-
 (defn generate-map
   [m n]
   (reduce (fn [res i]
