@@ -645,6 +645,22 @@
                  "assoc-before expects even number of arguments")))))))
 
 
+(defn rename-key
+  ([m k k']
+   (-rename-key m k k'))
+  ([m k k' & kv]
+   (loop [m  (-rename-key m k k')
+          kv (seq kv)
+          k  nil]
+     (if-let [r (first kv)]
+       (if (nil? k)
+         (recur m (rest kv) r)
+         (recur (-rename-key m k r) (rest kv) nil))
+       (if (nil? k)
+         m
+         (throw (IllegalArgumentException.
+                 "assoc-before expects even number of arguments")))))))
+
 ;; (defn assoc1
 ;;   ([m k v]
 ;;    (clojure.lang.RT/assoc m k v))
