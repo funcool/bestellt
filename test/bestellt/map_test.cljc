@@ -1,8 +1,7 @@
 (ns bestellt.map-test
   (:require
    [bestellt.map :as bmap]
-   #?(:clj  [clojure.test :as t]
-      :cljs [cljs.test :as t ])
+   [clojure.test :as t]
    [clojure.test.check.generators :as gen]
    #?(:clj [collection-check.core :as ct])
    #?(:cljs [cljs.reader :refer [read-string]])))
