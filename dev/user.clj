@@ -13,6 +13,12 @@
   [& exprs]
   `(with-progress-reporting (quick-bench (do ~@exprs) :verbose)))
 
+
+(defmacro run-quick-bench'
+  [& exprs]
+  `(quick-bench (do ~@exprs) :verbose))
+
+
 (defmacro run-bench
   [& exprs]
   `(with-progress-reporting (bench (do ~@exprs) :verbose)))
@@ -31,72 +37,93 @@
            (test/test-vars [(resolve o)]))
        (test/test-ns o)))))
 
-;; (defn generate-map
-;;   [m n]
-;;   (reduce (fn [res i]
-;;             (assoc res (keyword (str "a" i)) i))
-;;           m
-;;           (range n)))
+(defn generate-map
+  [m n]
+  (reduce (fn [res i]
+            (assoc res (keyword (str "a" i)) i))
+          m
+          (range n)))
 
-;; (defn bench-assoc-big
-;;   []
-;;   (let [m1 (-> (linked/map) (generate-map 10))
-;;         m2 (-> (bmap/map) (generate-map 10))
-;;         m3 (generate-map {} 10)]
+(def sample
+  (generate-map (bmap/map) 10))
 
-;;     (println "=> linked")
-;;     (run-quick-bench'
-;;      (-> m1
-;;          (assoc :c1 1)
-;;          (assoc :c2 2)
-;;          (assoc :c3 3)
-;;          (assoc :c4 4)
-;;          (assoc :c5 5)))
+(defn bench-reduce-kv
+  []
+  (let [m1 (-> (linked/map) (generate-map 10))
+        m2 (-> (bmap/map) (generate-map 10))
+        m3 (generate-map {} 10)]
 
-;;     (println "=> bestellt")
-;;     (run-quick-bench'
-;;      (-> m2
-;;          (assoc :c1 1)
-;;          (assoc :c2 2)
-;;          (assoc :c3 3)
-;;          (assoc :c4 4)
-;;          (assoc :c5 5)))
+    (println "=> linked")
+    (run-quick-bench'
+     (reduce-kv (fn [a k v] (+ a v)) 0 m1))
 
-;;     (println "=> native")
-;;     (run-quick-bench'
-;;      (-> m3
-;;          (assoc :c1 1)
-;;          (assoc :c2 2)
-;;          (assoc :c3 3)
-;;          (assoc :c4 4)
-;;          (assoc :c5 5)))))
+    (println "=> bestellt")
+    (run-quick-bench'
+     (reduce-kv (fn [a k v] (+ a v)) 0 m2))
 
-;; (defn bench-assoc-small
-;;   []
-;;   (let [m1 (-> (linked/map) (generate-map 3))
-;;         m2 (-> (bmap/map) (generate-map 3))
-;;         m3 (generate-map {} 3)]
+    (println "=> native")
+    (run-quick-bench'
+     (reduce-kv (fn [a k v] (+ a v)) 0 m3))))
 
-;;     (println "=> linked")
-;;     (run-quick-bench'
-;;      (-> m1
-;;          (assoc :c1 1)
-;;          (assoc :c2 2)
-;;          (assoc :c3 3)))
+(defn bench-assoc-big
+  []
+  (let [m1 (-> (linked/map) (generate-map 10))
+        m2 (-> (bmap/map) (generate-map 10))
+        m3 (generate-map {} 10)]
 
-;;     (println "=> bestellt")
-;;     (run-quick-bench'
-;;      (-> m2
-;;          (assoc :c1 1)
-;;          (assoc :c2 2)
-;;          (assoc :c3 3)))
+    (println "=> linked")
+    (run-quick-bench'
+     (-> m1
+         (assoc :c1 1)
+         (assoc :c2 2)
+         (assoc :c3 3)
+         (assoc :c4 4)
+         (assoc :c5 5)))
 
-;;     (println "=> native")
-;;     (run-quick-bench'
-;;      (-> m3
-;;          (assoc :c1 1)
-;;          (assoc :c2 2)
-;;          (assoc :c3 3)))))
+    (println "=> bestellt")
+    (run-quick-bench'
+     (-> m2
+         (assoc :c1 1)
+         (assoc :c2 2)
+         (assoc :c3 3)
+         (assoc :c4 4)
+         (assoc :c5 5)))
+
+    (println "=> native")
+    (run-quick-bench'
+     (-> m3
+         (assoc :c1 1)
+         (assoc :c2 2)
+         (assoc :c3 3)
+         (assoc :c4 4)
+         (assoc :c5 5)))))
+
+(defn bench-assoc-small
+  []
+  (let [m1 (-> (linked/map) (generate-map 3))
+        m2 (-> (bmap/map) (generate-map 3))
+        m3 (generate-map {} 3)]
+
+    (println "=> linked")
+    (run-quick-bench'
+     (-> m1
+         (assoc :c1 1)
+         (assoc :c2 2)
+         (assoc :c3 3)))
+
+    (println "=> bestellt")
+    (run-quick-bench'
+     (-> m2
+         (assoc :c1 1)
+         (assoc :c2 2)
+         (assoc :c3 3)))
+
+    (println "=> native")
+    (run-quick-bench'
+     (-> m3
+         (assoc :c1 1)
+         (assoc :c2 2)
+         (assoc :c3 3)))))
 
 ;; (defn bench-seq-big
 ;;   []

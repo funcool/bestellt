@@ -19,6 +19,7 @@
                             IPersistentMap
                             IMapEntry
                             IReduceInit
+                            IKVReduce
                             MapEntry
                             MapEquivalence
                             Reversible
@@ -173,6 +174,7 @@
 (declare ^:private dissoc*)
 (declare ^:private seq*)
 (declare ^:private rseq*)
+(declare ^:private kvreduce*)
 
 #?(:clj
    (deftype LinkedMap [head delegate ^:unsynchronized-mutable _hash]
@@ -298,6 +300,10 @@
        (when-not _hash
          (set! _hash (clojure.lang.Murmur3/hashUnordered this)))
        _hash)
+
+     IKVReduce
+     (kvreduce [this f init]
+       (kvreduce* this f init))
 
      Object
      (toString [this]
@@ -638,6 +644,35 @@
     (when (pos? (count delegate))
       (let [tail (.-l ^Node head-node)]
         (visit-node delegate head tail 1)))))
+
+(defn- kvreduce*
+  [^LinkedMap this f init]
+  (let [delegate  (.-delegate this)]
+    (when (pos? (count delegate))
+      (let [head      (.-head this)
+            head-node (get delegate head)
+            tail      (.-l ^Node head-node)]
+
+        ;; (prn "kvreduce*" head tail)
+        (loop [state   (f init (.-k ^Node head-node) (.-v ^Node head-node))
+               current head]
+          ;; (prn "LOOP" state current)
+
+          (cond
+            (reduced? state)
+            @state
+
+            (= current tail)
+            (let [node  (get delegate current)
+                  state (f state (.-k ^Node node) (.-v ^Node node))]
+              (if (reduced? state)
+                @state
+                state))
+
+            :else
+            (let [node (get delegate current)]
+              (recur (f state (.-k ^Node node) (.-v ^Node node))
+                     (.-r ^Node node)))))))))
 
 (defn- rseq*
   [^LinkedMap this]
