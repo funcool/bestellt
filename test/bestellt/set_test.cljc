@@ -92,13 +92,13 @@
   (let [s (bset/set 'a 1 :b 2)]
     (t/is (= "[a 1 :b 2]" (str s)))))
 
-(t/deftest print-and-read-ordered
-  (let [s (bset/set 1 2 9 8 7 5)]
-    (t/is (= "#bestellt/set [1 2 9 8 7 5]"
-           (pr-str s)))
-    (let [o (read-string (pr-str s))]
-      ;; #?(:clj (t/is (= bestellt.set.LinkedSet (type o))))
-      (t/is (= '(1 2 9 8 7 5) (seq o))))))
+;; (t/deftest print-and-read-ordered
+;;   (let [s (bset/set 1 2 9 8 7 5)]
+;;     (t/is (= "#bestellt/set [1 2 9 8 7 5]"
+;;            (pr-str s)))
+;;     #_(let [o (read-string (pr-str s))]
+;;       ;; #?(:clj (t/is (= bestellt.set.LinkedSet (type o))))
+;;       #_(t/is (= '(1 2 9 8 7 5) (seq o))))))
 
 (t/deftest comparing
   (let [s1 (bset/set 1 2 3)

@@ -75,6 +75,14 @@
         result (reduce-kv (fn [s k v] (+ s v)) 0 data)]
     (t/is (= 6 result))))
 
+(t/deftest find-1
+  (let [data   (bmap/map :a 1 :b 2 :c 3)
+        result (find data :a)]
+    (t/is #?(:clj (instance? clojure.lang.IMapEntry result)
+             :cljs (implements? cljs.core/IMapEntry result)))))
+
+
+
 (t/deftest equality
   (let [empty-map (bmap/map)
         one-item  (assoc empty-map 1 2)]

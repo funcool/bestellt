@@ -118,7 +118,7 @@
        (LinkedSet. (assoc delegate o nil)))
 
      IEmptyableCollection
-     (-empty [coll] (with-meta empty-linked-set meta))
+     (-empty [coll] (with-meta empty-set meta))
 
      IEquiv
      (-equiv [coll other]

@@ -116,8 +116,7 @@
      (reduce [this f start]
        (-> start
            (f k)
-           (f v)))
-     )
+           (f v))))
 
    :cljs
    (deftype Node [k v l r ^:mutable _hash]
@@ -244,6 +243,7 @@
                              (= v (val other)))))
                     (.seq this))))
 
+     IReduceInit
      IReduce
      (reduce [this f]
        (if (zero? (.count ^Counted this))
@@ -314,10 +314,8 @@
      (toString [this]
        (str "{" (string/join ", " (for [[k v] this] (str k " " v))) "}"))
      (equals [this other]
-       ;; (prn "equals")
        (.equiv this other))
      (hashCode [this]
-       ;; (prn "hashCode")
        (.hashCode ^Object (into {} this))))
 
    :cljs
@@ -388,11 +386,30 @@
          (.-v ^Node node)
          not-found))
 
-     ;; IFind
-     ;; (-find [coll k]
-     ;;        (if-let [node (c/-lookup delegate k)]
-     ;;          node
-     ;;          not-found))
+     IFind
+     (-find [coll k]
+       (c/-lookup delegate k))
+
+     IReduce
+     (-reduce [this f]
+       (if (zero? (count this))
+         (f)
+         (let [head-node (get delegate head)
+               next-head (.-r ^Node head-node)
+               last      (.-l ^Node head-node)]
+           (reduce* delegate f next-head last head-node))))
+
+     (-reduce [this f init]
+       (if (zero? (count this))
+         init
+         (let [head-node (get delegate head)
+               last      (.-l ^Node head-node)]
+           (reduce* delegate f head last init))))
+
+     IKVReduce
+     (-kv-reduce [this f init]
+       (kvreduce* delegate head f init))
+
 
      IAssociative
      (-assoc [coll k v]
@@ -404,13 +421,6 @@
      IMap
      (-dissoc [coll k]
        (dissoc* coll k))
-
-     ;; ;; TODO: optimize / fix
-     ;; IKVReduce
-     ;; (-kv-reduce [coll f init]
-     ;;             (reduce #(do
-     ;;                        (prn "reduce" %2)
-     ;;                        (apply (partial f %1) %2) init (seq coll))))
 
      IFn
      (-invoke [coll k]
@@ -660,7 +670,6 @@
                    (.-r ^Node node))))))
     init))
 
-
 ;;;; seq and rseq impl
 
 (defn- visit-node
@@ -719,9 +728,8 @@
          (recur (-assoc-after m key k r) (rest kv) k nil))
        (if (nil? k)
          m
-         ;; FIXME: cljs
-         (throw (IllegalArgumentException.
-                 "assoc-after expects even number of arguments")))))))
+         (throw (new #?(:clj IllegalArgumentException :cljs js/Error)
+                     "assoc-after expects even number of arguments")))))))
 
 (defn assoc-before
   ([m key k v]
@@ -736,8 +744,8 @@
          (recur (-assoc-before m key k r) (rest kv) nil))
        (if (nil? k)
          m
-         (throw (IllegalArgumentException.
-                 "assoc-before expects even number of arguments")))))))
+         (throw (new #?(:clj IllegalArgumentException :cljs js/Error)
+                     "assoc-before expects even number of arguments")))))))
 
 (defn rename-key
   ([m k k']
@@ -752,8 +760,8 @@
          (recur (-rename-key m k r) (rest kv) nil))
        (if (nil? k)
          m
-         (throw (IllegalArgumentException.
-                 "assoc-before expects even number of arguments")))))))
+         (throw (new #?(:clj IllegalArgumentException :cljs js/Error)
+                     "assoc-before expects even number of arguments")))))))
 
 ;; (defn assoc1
 ;;   ([m k v]
