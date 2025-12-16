@@ -10,11 +10,15 @@
                             IFn
                             IHashEq
                             ILookup
+                            Murmur3
+                            Indexed
+                            Sequential
                             Util
                             IPersistentCollection
                             IPersistentVector
                             IPersistentMap
                             IMapEntry
+                            IReduceInit
                             MapEntry
                             MapEquivalence
                             Reversible
@@ -37,114 +41,130 @@
   (-assoc-before [_ key k v] "Assoc a new entry before an existing key")
   (-rename-key [_ key k] "Rename a key of a entry respecting the existing order"))
 
-(deftype Node [k v l r]
-  #?@(:clj
-      [IMapEntry
-       (key [_] k)
-       (val [_] v)
+#?(:clj
+   (deftype Node [k v l r ^:unsynchronized-mutable _hash]
+     IMapEntry
+     (key [_] k)
+     (val [_] v)
 
-       (getKey [_] k)
-       (getValue [_] v)
+     (getKey [_] k)
+     (getValue [_] v)
 
-       Object
-       (equals [_ other]
-               (cond
-                 (instance? Map$Entry other)
-                 (and (= k (.getKey ^Map$Entry other))
-                      (= v (.getValue ^Map$Entry other)))
+     Object
+     (equals [_ other]
+       (cond
+         (instance? Map$Entry other)
+         (and (= k (.getKey ^Map$Entry other))
+              (= v (.getValue ^Map$Entry other)))
 
-                 (instance? IPersistentVector other)
-                 (and (= 2 (.count ^IPersistentVector other))
-                      (= k (.nth ^IPersistentVector other 0))
-                      (= v (.nth ^IPersistentVector other 1)))
+         (instance? IPersistentVector other)
+         (and (= 2 (.count ^IPersistentVector other))
+              (= k (.nth ^IPersistentVector other 0))
+              (= v (.nth ^IPersistentVector other 1)))
 
-                 :else
-                 false))
+         :else
+         false))
 
-       clojure.lang.Seqable
-       (seq [_]
-            (list k v))
+     IHashEq
+     (hasheq [this]
+       (when-not _hash
+         (set! _hash (Murmur3/hashOrdered (.seq ^Seqable this))))
+       _hash)
 
-       clojure.lang.ILookup
-       (valAt [this k]
-              (.valAt this k nil))
+     Seqable
+     (seq [_]
+       (list k v))
 
-       (valAt [this k not-found]
-              (if (int? k)
-                (.nth this k not-found)
-                (case k
-                  :k k
-                  :l l
-                  :r r
-                  :v v
-                  not-found)))
+     Iterable
+     (iterator [this] (SeqIterator. (.seq this)))
 
-       clojure.lang.Sequential
-       clojure.lang.Indexed
-       (nth [_ index]
-            (case index
-              0 k
-              1 v
-              (throw (IndexOutOfBoundsException.))))
+     ILookup
+     (valAt [this k]
+       (.valAt this k nil))
 
-       (nth [_ index not-found]
-            (case index
-              0 k
-              1 v
-              not-found))
+     (valAt [this k not-found]
+       (if (int? k)
+         (.nth this k not-found)
+         (case k
+           :k k
+           :l l
+           :r r
+           :v v
+           not-found)))
 
-       clojure.lang.Counted
-       (count [_] 2)]
+     Sequential
+     Indexed
+     (nth [_ index]
+       (case index
+         0 k
+         1 v
+         (throw (IndexOutOfBoundsException.))))
 
-      :cljs
-      [IEquiv
-       (-equiv [coll other] (equiv-sequential coll other))
+     (nth [_ index not-found]
+       (case index
+         0 k
+         1 v
+         not-found))
 
-       ;; IHash
-       ;; (-hash [coll] (caching-hash coll hash-ordered-coll __hash))
+     Counted
+     (count [_] 2)
 
-       IMapEntry
-       (-key [node] k)
-       (-val [node] v)
+     ;; Just for faster to vec conversion, does not respects reduced
+     IReduceInit
+     (reduce [this f start]
+       (-> start
+           (f k)
+           (f v)))
+     )
 
-       ISequential
-       ISeqable
-       (-seq [coll] (list k v))
+   :cljs
+   (deftype Node [k v l r ^:mutable _hash]
+     IEquiv
+     (-equiv [coll other] (equiv-sequential coll other))
 
-       ICounted
-       (-count [_] 2)
+     IHash
+     (-hash [coll] (caching-hash coll hash-ordered-coll _hash))
 
-       IIndexed
-       (-nth [coll index]
-             (case index
-               0 k
-               1 v
-               (throw (js/Error. "Index out of bounds"))))
+     IMapEntry
+     (-key [node] k)
+     (-val [node] v)
 
-       (-nth [coll index not-found]
-             (case index
-               0 k
-               1 v
-               not-found))
+     ISequential
+     ISeqable
+     (-seq [coll] (list k v))
 
-       ILookup
-       (-lookup [this k]
-                (-lookup this k nil))
+     ICounted
+     (-count [_] 2)
 
-       (-lookup [this k not-found]
-                (if (int? k)
-                  (-nth this k not-found)
-                  (case k
-                    :k k
-                    :l l
-                    :r r
-                    :v v
-                    not-found)))
+     IIndexed
+     (-nth [coll index]
+       (case index
+         0 k
+         1 v
+         (throw (js/Error. "Index out of bounds"))))
 
-       IPrintWithWriter
-       (-pr-writer [coll writer opts] (-write writer (str "[" k " " v "]")))
+     (-nth [coll index not-found]
+       (case index
+         0 k
+         1 v
+         not-found))
 
-       ]))
+     ILookup
+     (-lookup [this k]
+       (-lookup this k nil))
+
+     (-lookup [this k not-found]
+       (if (int? k)
+         (-nth this k not-found)
+         (case k
+           :k k
+           :l l
+           :r r
+           :v v
+           not-found)))
+
+     IPrintWithWriter
+     (-pr-writer [coll writer opts] (-write writer (str "[" k " " v "]")))))
 
 (declare ^:private assoc*)
 (declare ^:private assoc-after*)
@@ -155,7 +175,7 @@
 (declare ^:private rseq*)
 
 #?(:clj
-   (deftype LinkedMap [head delegate]
+   (deftype LinkedMap [head delegate ^:unsynchronized-mutable _hash]
      IPersistentMap
      (assoc [this k v]
        (assoc* this k v))
@@ -173,18 +193,26 @@
      (-rename-key [this key k] (rename-key* this key k))
 
      Map
-     (get [this k] (.valAt this k))
-     (isEmpty [this] (not (.seq this)))
+     (get [this k]
+       (.valAt this k))
+     (isEmpty [this]
+       (not (.seq this)))
      (entrySet [this]
        (let [coll (or (.seq this) (list))]
          (LinkedHashSet. ^Collection coll)))
-     (containsValue [this v] (boolean (seq (filter #(= % v) (.values this)))))
-     (values [this] (c/map val (.seq this)))
-     (size [_] (count delegate))
+     (containsValue [this v]
+       (boolean (seq (filter #(= % v) (.values this)))))
+     (values [this]
+       (c/map val (.seq this)))
+     (size [_]
+       (count delegate))
 
      Counted
      IPersistentCollection
-     (count [this] (.size this))
+
+     (count [this]
+       (.size this))
+
      (cons [this o]
        (condp instance? o
          Map$Entry (let [^Map$Entry e o]
@@ -197,7 +225,8 @@
                    (.assoc m (.getKey e) (.getValue e)))
                  this
                  o)))
-     (empty [_] (with-meta empty-map (meta delegate)))
+     (empty [_]
+       (with-meta empty-map (meta delegate)))
 
      (equiv [this o]
        (and (instance? Map o)
@@ -229,14 +258,18 @@
        (seq* this))
 
      Reversible
-     (rseq [this] (rseq* this))
+     (rseq [this]
+       (rseq* this))
 
      Iterable
-     (iterator [this] (SeqIterator. (.seq this)))
+     (iterator [this]
+       (SeqIterator. (.seq this)))
 
      Associative
-     (containsKey [_ k] (contains? delegate k))
-     (entryAt [this k] (.valAt ^IPersistentMap delegate k))
+     (containsKey [_ k]
+       (contains? delegate k))
+     (entryAt [this k]
+       (.valAt ^IPersistentMap delegate k))
 
      ILookup
      (valAt [this k]
@@ -256,15 +289,15 @@
      (meta [this]
        (.meta ^IObj delegate))
      (withMeta [this m]
-       (LinkedMap. head (.withMeta ^IObj delegate m)))
+       (LinkedMap. head (.withMeta ^IObj delegate m) nil))
 
      ;; IEditableCollection
 
      IHashEq
      (hasheq [this]
-       ;; (prn "hasheq")
-       ;; TODO: cache hash value
-       (.hasheq ^IHashEq (into {} this)))
+       (when-not _hash
+         (set! _hash (clojure.lang.Murmur3/hashUnordered this)))
+       _hash)
 
      Object
      (toString [this]
@@ -277,7 +310,7 @@
        (.hashCode ^Object (into {} this))))
 
    :cljs
-   (deftype LinkedMap [head delegate]
+   (deftype LinkedMap [head delegate ^:mutable _hash]
      Object
      (toString [coll]
        (str "{" (string/join ", " (for [[k v] coll] (str k " " v))) "}"))
@@ -291,11 +324,11 @@
 
      ICloneable
      (-clone [_]
-       (LinkedMap. head delegate))
+       (LinkedMap. head delegate nil))
 
      IWithMeta
      (-with-meta [coll meta]
-       (LinkedMap. head (with-meta delegate meta)))
+       (LinkedMap. head (with-meta delegate meta) nil))
 
      IMeta
      (-meta [coll] (meta delegate))
@@ -420,42 +453,48 @@
   (Node. k
          (.-v node)
          (.-l node)
-         (.-r node)))
+         (.-r node)
+         nil))
 
 (defn- update-node-value
   [^Node node v]
   (Node. (.-k node) v
          (.-l node)
-         (.-r node)))
+         (.-r node)
+         nil))
 
 (defn- update-node-right
   [^Node node r]
   (Node. (.-k node)
          (.-v node)
          (.-l node)
-         r))
+         r
+         nil))
 
 (defn- update-node-left
   [^Node node l]
   (Node. (.-k node)
          (.-v node)
          l
-         (.-r node)))
+         (.-r node)
+         nil))
 
 (defn- assoc*
   [^LinkedMap this k v]
   (let [head     (.-head this)
         delegate (.-delegate this)]
     (if (contains? delegate k)
-      (LinkedMap. head (update delegate k update-node-value v))
+      (LinkedMap. head (update delegate k update-node-value v) nil)
       (if (empty? delegate)
-        (LinkedMap. k (assoc delegate k (Node. k v k k)))
+        (LinkedMap. k (assoc delegate k (Node. k v k k nil)) nil)
         (let [head-node (get delegate head)
               tail      (.-l ^Node head-node)]
-          (LinkedMap. head (-> delegate
-                               (assoc k (Node. k v tail head))
-                               (update head update-node-left k)
-                               (update tail update-node-right k))))))))
+          (LinkedMap. head
+                      (-> delegate
+                          (assoc k (Node. k v tail head nil))
+                          (update head update-node-left k)
+                          (update tail update-node-right k))
+                      nil))))))
 
 (defn- dissoc*
   [^LinkedMap this k]
@@ -467,10 +506,12 @@
         (let [rk   (.-r ^Node entry)
               lk   (.-l ^Node entry)
               head (if (= k head) rk head)]
-          (LinkedMap. head (-> delegate
-                               (dissoc k)
-                               (update rk update-node-left lk)
-                               (update lk update-node-right rk)))))
+          (LinkedMap. head
+                      (-> delegate
+                          (dissoc k)
+                          (update rk update-node-left lk)
+                          (update lk update-node-right rk))
+                      nil)))
       this)))
 
 (defn- assoc-after*
@@ -479,7 +520,7 @@
         delegate (.-delegate this)]
 
     (if (empty? delegate)
-      (LinkedMap. k (assoc delegate k (Node. k v k k)))
+      (LinkedMap. k (assoc delegate k (Node. k v k k nil)) nil)
 
       (if (contains? delegate key)
         (if (contains? delegate k)
@@ -489,7 +530,7 @@
           (let [target-node (get delegate key)
                 tlk         (.-l ^Node target-node)
                 trk         (.-r ^Node target-node)
-                income-node (Node. k v key trk)
+                income-node (Node. k v key trk nil)
                 target-node (-> target-node
                                 (update-node-right k)
                                 (cond-> (and (= trk head)
@@ -499,13 +540,13 @@
                                 (update trk (fn [node] (update-node-left node k)))
                                 (assoc key target-node)
                                 (assoc k income-node))]
-            (LinkedMap. head delegate)))
+            (LinkedMap. head delegate nil)))
 
         (if (nil? key)
           (let [target-node (get delegate head)
                 tlk         (.-l ^Node target-node)
                 trk         (.-r ^Node target-node)
-                income-node (Node. k v tlk head)
+                income-node (Node. k v tlk head nil)
                 target-node (-> target-node
                                 (update-node-left k)
                                 (cond-> (= trk head)
@@ -514,7 +555,7 @@
                                 (update trk (fn [node] (update-node-right node k)))
                                 (assoc head target-node)
                                 (assoc k income-node))]
-            (LinkedMap. k delegate))
+            (LinkedMap. k delegate nil))
           this)))))
 
 (defn- assoc-before*
@@ -523,7 +564,7 @@
         delegate (.-delegate this)]
 
     (if (empty? delegate)
-      (LinkedMap. k (assoc delegate k (Node. k v k k)))
+      (LinkedMap. k (assoc delegate k (Node. k v k k nil)) nil)
 
       (if (contains? delegate key)
         (if (contains? delegate k)
@@ -532,13 +573,13 @@
           (let [target-node (get delegate key)
                 tlk         (.-l ^Node target-node)
                 trk         (.-r ^Node target-node)
-                income-node (Node. k v tlk key)
+                income-node (Node. k v tlk key nil)
                 delegate    (-> delegate
                                 (update tlk (fn [node] (update-node-right node k)))
                                 (assoc key (update-node-left target-node k))
                                 (assoc k income-node))
                 head        (if (= key head) k head)]
-            (LinkedMap. head delegate)))
+            (LinkedMap. head delegate nil)))
         (if (nil? key)
           (assoc* this k v)
           this)))))
@@ -562,7 +603,7 @@
               head     (if (= key head)
                          k
                          head)]
-          (LinkedMap. head delegate))
+          (LinkedMap. head delegate nil))
         this))))
 
 ;;;; reduce
@@ -607,11 +648,11 @@
       (visit-node delegate tail head 0))))
 
 (def empty-map
-  (LinkedMap. nil {}))
+  (LinkedMap. nil {} (hash {})))
 
 (defn ->map
   [o]
-  (into (LinkedMap. nil {}) o))
+  (into (LinkedMap. nil {} (hash {})) o))
 
 (defn map
   ([] empty-map)

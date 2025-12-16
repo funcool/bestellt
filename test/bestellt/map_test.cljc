@@ -21,13 +21,26 @@
 
 #?(:clj
    (t/deftest implementations
-     (let [basic (bmap/map)]
+     (let [basic (bmap/map)
+           other (bmap/map 1 2)
+           node  (first other)]
+
        (t/are [class] (instance? class basic)
          clojure.lang.IPersistentMap
          clojure.lang.IPersistentCollection
          clojure.lang.Counted
          clojure.lang.Associative
          java.util.Map)
+
+       (t/are [class] (instance? class node)
+         clojure.lang.IHashEq
+         clojure.lang.Seqable
+         clojure.lang.ILookup
+         clojure.lang.Sequential
+         clojure.lang.Indexed
+         clojure.lang.Counted
+         clojure.lang.IReduceInit
+         java.lang.Iterable)
 
        (t/are [object] (= (class object) (class basic))
          (conj basic [1 2])
