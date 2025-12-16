@@ -51,6 +51,31 @@
          (seq basic)
          (rseq basic)))))
 
+(t/deftest reduce-1
+  (let [data   (bmap/map :a 1 :b 2 :c 3)
+        result (reduce conj [] data)]
+    (t/is (= (seq result) (seq data)))))
+
+(t/deftest reduce-2
+  (let [data   (bmap/map :a 1 :b 2 :c 3)
+        result (reduce (fn [a node] (+ a (val node))) 0 data)]
+    (t/is (= 6 result))))
+
+(t/deftest reduce-empty
+  (let [data   (bmap/map)
+        result (reduce conj [] data)]
+    (t/is (= (seq result) (seq data)))))
+
+(t/deftest reduce-kv-empty
+  (let [data   (bmap/map)
+        result (reduce-kv (fn [s k v] (+ s v)) 0 data)]
+    (t/is (zero? result))))
+
+(t/deftest reduce-kv-1
+  (let [data   (bmap/map :a 1 :b 2 :c 3)
+        result (reduce-kv (fn [s k v] (+ s v)) 0 data)]
+    (t/is (= 6 result))))
+
 (t/deftest equality
   (let [empty-map (bmap/map)
         one-item  (assoc empty-map 1 2)]

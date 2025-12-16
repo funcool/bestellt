@@ -19,6 +19,7 @@
                             IPersistentMap
                             IMapEntry
                             IReduceInit
+                            IReduce
                             IKVReduce
                             MapEntry
                             MapEquivalence
@@ -174,6 +175,7 @@
 (declare ^:private dissoc*)
 (declare ^:private seq*)
 (declare ^:private rseq*)
+(declare ^:private reduce*)
 (declare ^:private kvreduce*)
 
 #?(:clj
@@ -242,18 +244,25 @@
                              (= v (val other)))))
                     (.seq this))))
 
+     IReduce
+     (reduce [this f]
+       (if (zero? (.count ^Counted this))
+         (f)
+         (let [head-node (get delegate head)
+               next-head (.-r ^Node head-node)
+               last      (.-l ^Node head-node)]
+           (reduce* delegate f next-head last head-node))))
 
-     ;; clojure.lang.IReduce
-     ;; (reduce [this f]
-     ;;         (case (.count ^Counted this)
-     ;;           0 (f)
-     ;;           1 (get delegate head)
-     ;;           2 (reduce* delegate f
+     (reduce [this f init]
+       (if (zero? (.count ^Counted this))
+         init
+         (let [head-node (get delegate head)
+               last      (.-l ^Node head-node)]
+           (reduce* delegate f head last init))))
 
-     ;; (reduce [this f init]
-     ;;         (let [head-node (get delegate head)
-     ;;               last      (.-l ^Node head-node)]
-     ;;           (reduce* delegate f head last init)))
+     IKVReduce
+     (kvreduce [this f init]
+       (kvreduce* delegate head f init))
 
      Seqable
      (seq [this]
@@ -300,10 +309,6 @@
        (when-not _hash
          (set! _hash (clojure.lang.Murmur3/hashUnordered this)))
        _hash)
-
-     IKVReduce
-     (kvreduce [this f init]
-       (kvreduce* this f init))
 
      Object
      (toString [this]
@@ -620,9 +625,41 @@
          result  result]
     (let [entry  (get delegate current)
           result (f result entry)]
-      (if (= current lkey)
+      (cond
+        (reduced? result)
+        @result
+
+        (= current lkey)
         result
+
+        :else
         (recur (.-r ^Node entry) result)))))
+
+(defn- kvreduce*
+  [delegate head f init]
+  (if (pos? (count delegate))
+    (let [head-node (get delegate head)
+          tail      (.-l ^Node head-node)]
+      (loop [state  (f init (.-k ^Node head-node) (.-v ^Node head-node))
+             next-k (.-r ^Node head-node)]
+
+        (cond
+          (reduced? state)
+          @state
+
+          (= next-k tail)
+          (let [node  (get delegate next-k)
+                state (f state (.-k ^Node node) (.-v ^Node node))]
+            (if (reduced? state)
+              @state
+              state))
+
+          :else
+          (let [node (get delegate next-k)]
+            (recur (f state (.-k ^Node node) (.-v ^Node node))
+                   (.-r ^Node node))))))
+    init))
+
 
 ;;;; seq and rseq impl
 
@@ -644,35 +681,6 @@
     (when (pos? (count delegate))
       (let [tail (.-l ^Node head-node)]
         (visit-node delegate head tail 1)))))
-
-(defn- kvreduce*
-  [^LinkedMap this f init]
-  (let [delegate  (.-delegate this)]
-    (when (pos? (count delegate))
-      (let [head      (.-head this)
-            head-node (get delegate head)
-            tail      (.-l ^Node head-node)]
-
-        ;; (prn "kvreduce*" head tail)
-        (loop [state   (f init (.-k ^Node head-node) (.-v ^Node head-node))
-               current head]
-          ;; (prn "LOOP" state current)
-
-          (cond
-            (reduced? state)
-            @state
-
-            (= current tail)
-            (let [node  (get delegate current)
-                  state (f state (.-k ^Node node) (.-v ^Node node))]
-              (if (reduced? state)
-                @state
-                state))
-
-            :else
-            (let [node (get delegate current)]
-              (recur (f state (.-k ^Node node) (.-v ^Node node))
-                     (.-r ^Node node)))))))))
 
 (defn- rseq*
   [^LinkedMap this]
