@@ -35,6 +35,8 @@
 #?(:clj (set! *warn-on-reflection* true))
 
 (declare empty-map)
+(declare ^:private make-linked-map)
+(declare ^:private make-linked-transient-map)
 (declare ^:private equiv-sequential)
 
 (defprotocol ILinkedMap
@@ -181,19 +183,23 @@
    (deftype LinkedMap [head delegate ^:unsynchronized-mutable _hash]
      IPersistentMap
      (assoc [this k v]
-       (assoc* this k v))
+       (assoc* this k v make-linked-map c/assoc))
      (assocEx [this k v]
        (if (.containsKey this k)
          (throw (RuntimeException. "Key already present"))
          (assoc this k v)))
-     (without [this k] (dissoc* this k))
+     (without [this k]
+       (dissoc* this k make-linked-map c/assoc c/dissoc))
 
      MapEquivalence
 
      ILinkedMap
-     (-assoc-after [this key k v] (assoc-after* this key k v))
-     (-assoc-before [this key k v] (assoc-before* this key k v))
-     (-rename-key [this key k] (rename-key* this key k))
+     (-assoc-after [this key k v]
+       (assoc-after* this key k v make-linked-map c/assoc c/dissoc))
+     (-assoc-before [this key k v]
+       (assoc-before* this key k v make-linked-map c/assoc c/dissoc))
+     (-rename-key [this key k]
+       (rename-key* this key k make-linked-map c/assoc c/dissoc))
 
      Map
      (get [this k]
@@ -327,9 +333,12 @@
        (-equiv this other))
 
      ILinkedMap
-     (-assoc-after [this key k v] (assoc-after* this key k v))
-     (-assoc-before [this key k v] (assoc-before* this key k v))
-     (-rename-key [this key k] (rename-key* this key k))
+     (-assoc-after [this key k v]
+       (assoc-after* this key k v make-linked-map c/assoc c/dissoc))
+     (-assoc-before [this key k v]
+       (assoc-before* this key k v make-linked-map c/assoc c/dissoc))
+     (-rename-key [this key k]
+       (rename-key* this key k make-linked-map c/assoc c/dissoc))
 
      ICloneable
      (-clone [_]
@@ -413,14 +422,14 @@
 
      IAssociative
      (-assoc [coll k v]
-       (assoc* coll k v))
+       (assoc* coll k v make-linked-map c/assoc))
 
      (-contains-key? [coll k]
        (contains? delegate k))
 
      IMap
      (-dissoc [coll k]
-       (dissoc* coll k))
+       (dissoc* coll k make-linked-map c/assoc c/dissoc))
 
      IFn
      (-invoke [coll k]
@@ -469,144 +478,158 @@
                 (= (first xs) (first ys)) (recur (next xs) (next ys))
                 :else false))))))
 
+(defn- make-linked-map
+  [head delegate]
+  (LinkedMap. head delegate nil))
+
+(defn- make-node
+  [k v l r]
+  (Node. k v l r nil))
+
 (defn- update-node-key
   [^Node node k]
-  (Node. k
-         (.-v node)
-         (.-l node)
-         (.-r node)
-         nil))
+  (make-node
+   k
+   (.-v node)
+   (.-l node)
+   (.-r node)))
 
 (defn- update-node-value
   [^Node node v]
-  (Node. (.-k node) v
-         (.-l node)
-         (.-r node)
-         nil))
+  (make-node
+   (.-k node)
+   v
+   (.-l node)
+   (.-r node)))
 
 (defn- update-node-right
   [^Node node r]
-  (Node. (.-k node)
-         (.-v node)
-         (.-l node)
-         r
-         nil))
+  (make-node
+   (.-k node)
+   (.-v node)
+   (.-l node)
+   r))
 
 (defn- update-node-left
   [^Node node l]
-  (Node. (.-k node)
-         (.-v node)
-         l
-         (.-r node)
-         nil))
+  (make-node
+   (.-k node)
+   (.-v node)
+   l
+   (.-r node)))
+
+(defn- update*
+  "A specialized update function that uses provided assoc-fn instead the
+  default one; This one allows reuse the same impl for persistent and transient
+  data structures."
+  [target assoc-fn k f & params]
+  (let [node (get target k)
+        node (apply f node params)]
+    (assoc-fn target k node)))
 
 (defn- assoc*
-  [^LinkedMap this k v]
-  (let [head     (.-head this)
-        delegate (.-delegate this)]
+  [this k v make-linked-map assoc-fn]
+  (let [head     (.-head ^LinkedMap this)
+        delegate (.-delegate ^LinkedMap this)]
     (if (contains? delegate k)
-      (LinkedMap. head (update delegate k update-node-value v) nil)
+      (make-linked-map head (update* delegate assoc-fn k update-node-value v))
       (if (empty? delegate)
-        (LinkedMap. k (assoc delegate k (Node. k v k k nil)) nil)
+        (make-linked-map k (assoc-fn delegate k (make-node k v k k)))
         (let [head-node (get delegate head)
               tail      (.-l ^Node head-node)]
-          (LinkedMap. head
-                      (-> delegate
-                          (assoc k (Node. k v tail head nil))
-                          (update head update-node-left k)
-                          (update tail update-node-right k))
-                      nil))))))
+          (make-linked-map head
+                           (-> delegate
+                               (assoc-fn k (Node. k v tail head nil))
+                               (update* assoc-fn head update-node-left k)
+                               (update* assoc-fn tail update-node-right k))))))))
 
 (defn- dissoc*
-  [^LinkedMap this k]
-  (let [head     (.-head this)
-        delegate (.-delegate this)]
+  [this k make-linked-map assoc-fn dissoc-fn]
+  (let [head     (.-head ^LinkedMap this)
+        delegate (.-delegate ^LinkedMap this)]
     (if-let [entry (get delegate k)]
       (if (= 1 (count delegate))
         (empty this)
         (let [rk   (.-r ^Node entry)
               lk   (.-l ^Node entry)
               head (if (= k head) rk head)]
-          (LinkedMap. head
-                      (-> delegate
-                          (dissoc k)
-                          (update rk update-node-left lk)
-                          (update lk update-node-right rk))
-                      nil)))
+          (make-linked-map head
+                           (-> delegate
+                               (dissoc-fn k)
+                               (update* assoc-fn rk update-node-left lk)
+                               (update* assoc-fn lk update-node-right rk)))))
       this)))
 
 (defn- assoc-after*
-  [^LinkedMap this key k v]
-  (let [head     (.-head this)
-        delegate (.-delegate this)]
+  [this key k v make-linked-map assoc-fn dissoc-fn]
+  (let [head     (.-head ^LinkedMap this)
+        delegate (.-delegate ^LinkedMap this)]
 
     (if (empty? delegate)
-      (LinkedMap. k (assoc delegate k (Node. k v k k nil)) nil)
-
+      (make-linked-map k (assoc-fn delegate k (make-node k v k k)))
       (if (contains? delegate key)
         (if (contains? delegate k)
-          (-> (dissoc* this k)
-              (assoc-after* key k v))
+          (-> (dissoc* this k make-linked-map assoc-fn dissoc-fn)
+              (assoc-after* key k v make-linked-map assoc-fn dissoc-fn))
 
           (let [target-node (get delegate key)
                 tlk         (.-l ^Node target-node)
                 trk         (.-r ^Node target-node)
-                income-node (Node. k v key trk nil)
+                income-node (make-node k v key trk)
                 target-node (-> target-node
                                 (update-node-right k)
                                 (cond-> (and (= trk head)
                                              (= key head))
                                   (update-node-left k)))
                 delegate    (-> delegate
-                                (update trk (fn [node] (update-node-left node k)))
-                                (assoc key target-node)
-                                (assoc k income-node))]
-            (LinkedMap. head delegate nil)))
+                                (update* assoc-fn trk update-node-left k)
+                                (assoc-fn key target-node)
+                                (assoc-fn k income-node))]
+            (make-linked-map head delegate)))
 
         (if (nil? key)
           (let [target-node (get delegate head)
                 tlk         (.-l ^Node target-node)
                 trk         (.-r ^Node target-node)
-                income-node (Node. k v tlk head nil)
+                income-node (make-node k v tlk head)
                 target-node (-> target-node
                                 (update-node-left k)
                                 (cond-> (= trk head)
                                   (update-node-right k)))
                 delegate    (-> delegate
-                                (update trk (fn [node] (update-node-right node k)))
-                                (assoc head target-node)
-                                (assoc k income-node))]
-            (LinkedMap. k delegate nil))
+                                (update* assoc-fn trk update-node-right k)
+                                (assoc-fn head target-node)
+                                (assoc-fn k income-node))]
+            (make-linked-map k delegate))
           this)))))
 
 (defn- assoc-before*
-  [^LinkedMap this key k v]
-  (let [head     (.-head this)
-        delegate (.-delegate this)]
+  [this key k v make-linked-map assoc-fn dissoc-fn]
+  (let [head     (.-head ^LinkedMap this)
+        delegate (.-delegate ^LinkedMap this)]
 
     (if (empty? delegate)
-      (LinkedMap. k (assoc delegate k (Node. k v k k nil)) nil)
-
+      (make-linked-map k (assoc-fn delegate k (make-node k v k k)))
       (if (contains? delegate key)
         (if (contains? delegate k)
-          (-> (dissoc* this k)
-              (assoc-before* key k v))
+          (-> (dissoc* this k make-linked-map assoc-fn dissoc-fn)
+              (assoc-before* key k v make-linked-map assoc-fn dissoc-fn))
           (let [target-node (get delegate key)
                 tlk         (.-l ^Node target-node)
                 trk         (.-r ^Node target-node)
-                income-node (Node. k v tlk key nil)
+                income-node (make-node k v tlk key)
                 delegate    (-> delegate
-                                (update tlk (fn [node] (update-node-right node k)))
-                                (assoc key (update-node-left target-node k))
-                                (assoc k income-node))
+                                (update* assoc-fn tlk update-node-right k)
+                                (assoc-fn key (update-node-left target-node k))
+                                (assoc-fn k income-node))
                 head        (if (= key head) k head)]
-            (LinkedMap. head delegate nil)))
+            (make-linked-map head delegate)))
         (if (nil? key)
-          (assoc* this k v)
+          (assoc* this k v assoc-fn)
           this)))))
 
 (defn- rename-key*
-  [^LinkedMap this key k]
+  [^LinkedMap this key k make-linked-map assoc-fn dissoc-fn]
   (let [delegate (.-delegate this)]
     (if (or (empty? delegate)
             (= key k))
@@ -616,15 +639,15 @@
         (let [tlk      (.-l ^Node target-node)
               trk      (.-r ^Node target-node)
               delegate (-> delegate
-                           (dissoc key)
-                           (assoc k target-node)
-                           (update tlk update-node-right k)
-                           (update trk update-node-left k))
+                           (dissoc-fn key)
+                           (assoc-fn k target-node)
+                           (update* assoc-fn tlk update-node-right k)
+                           (update* assoc-fn trk update-node-left k))
               head     (.-head this)
               head     (if (= key head)
                          k
                          head)]
-          (LinkedMap. head delegate nil))
+          (make-linked-map head delegate))
         this))))
 
 ;;;; reduce

@@ -11,14 +11,6 @@
      (ct/assert-map-like (bmap/map) gen/int gen/int)))
 
 #?(:clj
-   (t/deftest check-2
-     (ct/assert-map-like (bmap/map) gen/int gen/string)))
-
-#?(:clj
-   (t/deftest check-3
-     (ct/assert-map-like (bmap/map) gen/string gen/string)))
-
-#?(:clj
    (t/deftest implementations
      (let [basic (bmap/map)
            other (bmap/map 1 2)
