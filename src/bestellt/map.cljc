@@ -626,9 +626,9 @@
   "A specialized update function that uses provided assoc-fn instead the
   default one; This one allows reuse the same impl for persistent and transient
   data structures."
-  [target assoc-fn k f & params]
+  [target assoc-fn k f param]
   (let [node (get target k)
-        node (apply f node params)]
+        node (f node param)]
     (assoc-fn target k node)))
 
 (defn- assoc*
