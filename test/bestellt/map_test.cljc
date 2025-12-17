@@ -73,10 +73,8 @@
     (t/is #?(:clj (instance? clojure.lang.IMapEntry result)
              :cljs (implements? cljs.core/IMapEntry result)))))
 
-
-
 (t/deftest equality
-  (let [empty-map (bmap/map)
+  (let [empty-map bmap/empty-map
         one-item  (assoc empty-map 1 2)]
 
     (t/testing "basic symmetric equality"
@@ -192,3 +190,15 @@
      (t/is (not (.isEmpty ^java.util.Map (bmap/map 1 2))))
      (t/is (= [] (vec (.entrySet ^java.util.Map (bmap/map)))))
      (t/is (= (partition 2 (range 100)) (vec (.entrySet ^java.util.Map (apply bmap/map (range 100))))))))
+
+
+(t/deftest transient-sample-ops
+  (let [result (-> bmap/empty-map
+                   (assoc -4 4)
+                   (dissoc -2)
+                   (transient)
+                   (assoc! 0 2)
+                   (assoc! 1 3)
+                   (dissoc! -4)
+                   (persistent!))]
+    (t/is (= result (into bmap/empty-map [[0 2] [1 3]])))))

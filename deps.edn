@@ -45,4 +45,3 @@
    {com.github.liquidz/antq {:mvn/version "RELEASE"}
     org.slf4j/slf4j-nop {:mvn/version "RELEASE"}}
    :main-opts ["-m" "antq.core"]}}}
-

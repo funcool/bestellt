@@ -17,6 +17,9 @@
                             IPersistentCollection
                             IPersistentVector
                             IPersistentMap
+                            IEditableCollection
+                            ITransientMap
+                            ITransientAssociative2
                             IMapEntry
                             IReduceInit
                             IReduce
@@ -38,6 +41,10 @@
 (declare ^:private make-linked-map)
 (declare ^:private make-linked-transient-map)
 (declare ^:private equiv-sequential)
+
+(defprotocol ILinkedMapInternal
+  (^:no-doc -get-head [this] "get current head")
+  (^:no-doc -get-delegate [this] "get current delegate"))
 
 (defprotocol ILinkedMap
   "A protocol that defines specific API for map that conserves insertion order"
@@ -170,6 +177,7 @@
      (-pr-writer [coll writer opts] (-write writer (str "[" k " " v "]")))))
 
 (declare ^:private assoc*)
+(declare ^:private cons*)
 (declare ^:private assoc-after*)
 (declare ^:private assoc-before*)
 (declare ^:private rename-key*)
@@ -201,6 +209,12 @@
      (-rename-key [this key k]
        (rename-key* this key k make-linked-map c/assoc c/dissoc))
 
+     ILinkedMapInternal
+     (-get-delegate [this]
+       (.-delegate this))
+     (-get-head [this]
+       (.-head this))
+
      Map
      (get [this k]
        (.valAt this k))
@@ -222,18 +236,9 @@
      (count [this]
        (.size this))
 
-     (cons [this o]
-       (condp instance? o
-         Map$Entry (let [^Map$Entry e o]
-                     (.assoc this (.getKey e) (.getValue e)))
-         IPersistentVector (if (= 2 (count o))
-                             (.assoc this (nth o 0) (nth o 1))
-                             (throw (IllegalArgumentException. "Vector arg to map conj must be a pair")))
-         ;; TODO support for transient to speed up multiple assoc?
-         (reduce (fn [^IPersistentMap m ^Map$Entry e]
-                   (.assoc m (.getKey e) (.getValue e)))
-                 this
-                 o)))
+     (cons [this val]
+       (cons* c/assoc this val))
+
      (empty [_]
        (with-meta empty-map (meta delegate)))
 
@@ -308,7 +313,9 @@
      (withMeta [this m]
        (LinkedMap. head (.withMeta ^IObj delegate m) nil))
 
-     ;; IEditableCollection
+     IEditableCollection
+     (asTransient [this]
+       (make-linked-transient-map head (transient delegate)))
 
      IHashEq
      (hasheq [this]
@@ -340,6 +347,10 @@
      (-rename-key [this key k]
        (rename-key* this key k make-linked-map c/assoc c/dissoc))
 
+     ILinkedMapInternal
+     (-get-delegate [this] delegate)
+     (-get-head [this] head)
+
      ICloneable
      (-clone [_]
        (LinkedMap. head delegate nil))
@@ -352,17 +363,8 @@
      (-meta [coll] (meta delegate))
 
      ICollection
-     (-conj [coll entry]
-       (if (vector? entry)
-         (-assoc coll (-nth entry 0) (-nth entry 1))
-         (loop [ret coll es (seq entry)]
-           (if (nil? es)
-             ret
-             (let [e (first es)]
-               (if (vector? e)
-                 (recur (-assoc ret (-nth e 0) (-nth e 1))
-                        (next es))
-                 (throw (js/Error. "conj on a map takes map entries or seqables of map entries"))))))))
+     (-conj [this val]
+       (cons* c/assoc this val))
 
      IEmptyableCollection
      (-empty [coll] (-with-meta empty-map (meta delegate)))
@@ -438,10 +440,108 @@
      (-invoke [coll k not-found]
        (-lookup coll k not-found))
 
-     ;; IEditableCollection
+     IEditableCollection
+     (-as-transient [this]
+       (make-linked-transient-map head (transient delegate)))
 
      IPrintWithWriter
      (-pr-writer [coll writer opts] (-write writer (str "#bestellt/map " (into [] coll))))))
+
+#?(:clj
+   (deftype TransientLinkedMap [head delegate ^:unsynchronized-mutable _hash]
+     ITransientMap
+     (assoc [this k v]
+       (assoc* this k v make-linked-transient-map c/assoc!))
+     (without [this k]
+       (dissoc* this k make-linked-transient-map c/assoc! c/dissoc!))
+
+     (persistent [this]
+       (make-linked-map head (persistent! delegate)))
+     (conj [this val]
+       (cons* c/assoc! this val))
+
+     (valAt [this k]
+       (.valAt this k nil))
+     (valAt [_ k not-found]
+       (if-let [entry (.valAt ^Associative delegate k)]
+         (.-v ^Node entry)
+         not-found))
+
+     (count [this]
+       (count delegate))
+
+     ILinkedMap
+     (-assoc-after [this key k v]
+       (assoc-after* this key k v make-linked-transient-map c/assoc! c/dissoc!))
+     (-assoc-before [this key k v]
+       (assoc-before* this key k v make-linked-transient-map c/assoc! c/dissoc!))
+     (-rename-key [this key k]
+       (rename-key* this key k make-linked-transient-map c/assoc! c/dissoc!))
+
+     ILinkedMapInternal
+     (-get-delegate [this]
+       (.-delegate this))
+     (-get-head [this]
+       (.-head this))
+
+     ITransientAssociative2
+     (containsKey [_ k]
+       (contains? delegate k))
+
+     (entryAt [this k]
+       (.valAt ^ITransientMap delegate k))
+
+     IFn
+     (invoke [this k]
+       (.valAt this k))
+     (invoke [this k not-found]
+       (.valAt this k not-found)))
+
+   :cljs
+   (deftype TransientLinkedMap [head delegate ^:mutable _hash]
+     ITransientMap
+     (-dissoc! [this key]
+       (dissoc* this key make-linked-transient-map c/assoc! c/dissoc!))
+
+     ITransientAssociative
+     (-assoc! [this key val]
+       (assoc* this key val make-linked-transient-map c/assoc!))
+
+     ITransientCollection
+     (-conj! [this val]
+       (cons* c/assoc! this val))
+     (-persistent! [this]
+       (make-linked-map head (persistent! delegate)))
+
+     ILinkedMap
+     (-assoc-after [this key k v]
+       (assoc-after* this key k v make-linked-transient-map c/assoc! c/dissoc!))
+     (-assoc-before [this key k v]
+       (assoc-before* this key k v make-linked-transient-map c/assoc! c/dissoc!))
+     (-rename-key [this key k]
+       (rename-key* this key k make-linked-transient-map c/assoc! c/dissoc!))
+
+     ILinkedMapInternal
+     (-get-delegate [this]
+       (.-delegate this))
+     (-get-head [this]
+       (.-head this))
+
+     IFn
+     (-invoke [this k]
+       (-lookup this k))
+
+     (-invoke [this k not-found]
+       (-lookup this k not-found))
+
+     ILookup
+     (-lookup [coll k]
+       (-lookup coll k nil))
+
+     (-lookup [coll k not-found]
+       (if-let [node (c/-lookup delegate k)]
+         (.-v ^Node node)
+         not-found))))
 
 (def ^:private xf:map-node-to-vec
   (c/map (fn [node] [(key node) (val node)])))
@@ -481,6 +581,10 @@
 (defn- make-linked-map
   [head delegate]
   (LinkedMap. head delegate nil))
+
+(defn- make-linked-transient-map
+  [head delegate]
+  (TransientLinkedMap. head delegate nil))
 
 (defn- make-node
   [k v l r]
@@ -529,8 +633,8 @@
 
 (defn- assoc*
   [this k v make-linked-map assoc-fn]
-  (let [head     (.-head ^LinkedMap this)
-        delegate (.-delegate ^LinkedMap this)]
+  (let [head     (-get-head this)
+        delegate (-get-delegate this)]
     (if (contains? delegate k)
       (make-linked-map head (update* delegate assoc-fn k update-node-value v))
       (if (empty? delegate)
@@ -539,17 +643,17 @@
               tail      (.-l ^Node head-node)]
           (make-linked-map head
                            (-> delegate
-                               (assoc-fn k (Node. k v tail head nil))
+                               (assoc-fn k (make-node k v tail head))
                                (update* assoc-fn head update-node-left k)
                                (update* assoc-fn tail update-node-right k))))))))
 
 (defn- dissoc*
   [this k make-linked-map assoc-fn dissoc-fn]
-  (let [head     (.-head ^LinkedMap this)
-        delegate (.-delegate ^LinkedMap this)]
+  (let [head     (-get-head this)
+        delegate (-get-delegate this)]
     (if-let [entry (get delegate k)]
       (if (= 1 (count delegate))
-        (empty this)
+        (make-linked-map head (dissoc-fn delegate k))
         (let [rk   (.-r ^Node entry)
               lk   (.-l ^Node entry)
               head (if (= k head) rk head)]
@@ -560,10 +664,27 @@
                                (update* assoc-fn lk update-node-right rk)))))
       this)))
 
+(defn- cons*
+  [assoc-fn this o]
+  (cond
+    (map-entry? o)
+    (assoc-fn this (key o) (val o))
+
+    (vector? o)
+    (if (= 2 (count o))
+      (assoc-fn this (nth o 0) (nth o 1))
+      (throw (new #?(:clj IllegalArgumentException :cljs js/Error)
+                  "vector arg to map conj must be a pair")))
+
+    ;; Maybe add support for transient to speed up multiple assoc?
+    ;; (on my own benchmark it has not much difference)
+    :else
+    (reduce (partial cons* assoc-fn) this o)))
+
 (defn- assoc-after*
   [this key k v make-linked-map assoc-fn dissoc-fn]
-  (let [head     (.-head ^LinkedMap this)
-        delegate (.-delegate ^LinkedMap this)]
+  (let [head     (-get-head this)
+        delegate (-get-delegate this)]
 
     (if (empty? delegate)
       (make-linked-map k (assoc-fn delegate k (make-node k v k k)))
@@ -605,8 +726,8 @@
 
 (defn- assoc-before*
   [this key k v make-linked-map assoc-fn dissoc-fn]
-  (let [head     (.-head ^LinkedMap this)
-        delegate (.-delegate ^LinkedMap this)]
+  (let [head     (-get-head this)
+        delegate (-get-delegate this)]
 
     (if (empty? delegate)
       (make-linked-map k (assoc-fn delegate k (make-node k v k k)))
@@ -625,7 +746,7 @@
                 head        (if (= key head) k head)]
             (make-linked-map head delegate)))
         (if (nil? key)
-          (assoc* this k v assoc-fn)
+          (assoc* this k v make-linked-map assoc-fn)
           this)))))
 
 (defn- rename-key*
