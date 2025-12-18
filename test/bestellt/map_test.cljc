@@ -191,8 +191,7 @@
      (t/is (= [] (vec (.entrySet ^java.util.Map (bmap/map)))))
      (t/is (= (partition 2 (range 100)) (vec (.entrySet ^java.util.Map (apply bmap/map (range 100))))))))
 
-
-(t/deftest transient-sample-ops
+(t/deftest transient-1
   (let [result (-> bmap/empty-map
                    (assoc -4 4)
                    (dissoc -2)
@@ -202,3 +201,97 @@
                    (dissoc! -4)
                    (persistent!))]
     (t/is (= result (into bmap/empty-map [[0 2] [1 3]])))))
+
+(t/deftest transient-2
+  (let [result (-> bmap/empty-map
+                   (assoc :a 1)
+                   (transient)
+                   (dissoc! :a)
+                   (persistent!))]
+    (t/is (= result bmap/empty-map))))
+
+(t/deftest rename-key-1
+  (let [data   (-> bmap/empty-map
+                 (assoc :a 1)
+                 (assoc :b 2))
+        result (bmap/rename-key data :a :c)]
+    (t/is (= 2 (count data)))
+    (t/is (= 2 (count result)))
+    (let [[kp1 kp2] (seq result)]
+      (t/is (= :c (key kp1)))
+      (t/is (= :b (key kp2)))
+      (t/is (= 1 (val kp1)))
+      (t/is (= 2 (val kp2))))))
+
+(t/deftest rename-key-2
+  (let [data   (-> bmap/empty-map
+                 (assoc :a 1)
+                 (assoc :b 2))
+        result (bmap/rename-key data :c :d)]
+    (t/is (identical? result data))))
+
+(t/deftest rename-key-3
+  (let [data    bmap/empty-map
+        result (bmap/rename-key data :c :d)]
+    (t/is (identical? result data))))
+
+(t/deftest assoc-after-1
+  (let [data   (-> bmap/empty-map
+                 (assoc :a 1)
+                 (assoc :b 2))
+        result (bmap/assoc-after data :a :c 0)]
+    (t/is (= 2 (count data)))
+    (t/is (= 3 (count result)))
+    (t/is (= [:a :c :b] (keys result)))
+    (t/is (= [1 0 2] (vals result)))))
+
+(t/deftest assoc-after-2
+  (let [data   (-> bmap/empty-map
+                 (assoc :a 1)
+                 (assoc :b 2))
+        result (bmap/assoc-after data nil :c 0)]
+    (t/is (= 2 (count data)))
+    (t/is (= 3 (count result)))
+    (t/is (= [:c :a :b] (keys result)))
+    (t/is (= [0 1 2] (vals result)))))
+
+(t/deftest assoc-after-3
+  (let [data   (-> bmap/empty-map
+                 (assoc :a 1)
+                 (assoc :b 2))
+        result (bmap/assoc-after data :b :c 0)]
+    (t/is (= 2 (count data)))
+    (t/is (= 3 (count result)))
+    (t/is (= [:a :b :c] (keys result)))
+    (t/is (= [1 2 0] (vals result)))))
+
+(t/deftest assoc-before-1
+  (let [data   (-> bmap/empty-map
+                 (assoc :a 1)
+                 (assoc :b 2))
+        result (bmap/assoc-before data :a :c 0)]
+    (t/is (= 2 (count data)))
+    (t/is (= 3 (count result)))
+    (t/is (= [:c :a :b] (keys result)))
+    (t/is (= [0 1 2] (vals result)))))
+
+(t/deftest assoc-before-2
+  (let [data   (-> bmap/empty-map
+                 (assoc :a 1)
+                 (assoc :b 2))
+        result (bmap/assoc-before data nil :c 0)]
+    (t/is (= 2 (count data)))
+    (t/is (= 3 (count result)))
+    (t/is (= [:a :b :c] (keys result)))
+    (t/is (= [1 2 0] (vals result)))))
+
+(t/deftest assoc-before-3
+  (let [data   (-> bmap/empty-map
+                 (assoc :a 1)
+                 (assoc :b 2))
+        result (bmap/assoc-before data :b :c 0)]
+    (t/is (= 2 (count data)))
+    (t/is (= 3 (count result)))
+    (t/is (= [:a :c :b] (keys result)))
+    (t/is (= [1 0 2] (vals result)))))
+

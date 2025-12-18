@@ -210,10 +210,8 @@
        (rename-key* this key k make-linked-map c/assoc c/dissoc))
 
      ILinkedMapInternal
-     (-get-delegate [this]
-       (.-delegate this))
-     (-get-head [this]
-       (.-head this))
+     (-get-delegate [_] delegate)
+     (-get-head [_] head)
 
      Map
      (get [this k]
@@ -348,8 +346,8 @@
        (rename-key* this key k make-linked-map c/assoc c/dissoc))
 
      ILinkedMapInternal
-     (-get-delegate [this] delegate)
-     (-get-head [this] head)
+     (-get-delegate [_] delegate)
+     (-get-head [_] head)
 
      ICloneable
      (-clone [_]
@@ -479,10 +477,8 @@
        (rename-key* this key k make-linked-transient-map c/assoc! c/dissoc!))
 
      ILinkedMapInternal
-     (-get-delegate [this]
-       (.-delegate this))
-     (-get-head [this]
-       (.-head this))
+     (-get-delegate [_] delegate)
+     (-get-head [_] head)
 
      ITransientAssociative2
      (containsKey [_ k]
@@ -522,10 +518,8 @@
        (rename-key* this key k make-linked-transient-map c/assoc! c/dissoc!))
 
      ILinkedMapInternal
-     (-get-delegate [this]
-       (.-delegate this))
-     (-get-head [this]
-       (.-head this))
+     (-get-delegate [_] delegate)
+     (-get-head [_] head)
 
      IFn
      (-invoke [this k]
@@ -694,7 +688,6 @@
               (assoc-after* key k v make-linked-map assoc-fn dissoc-fn))
 
           (let [target-node (get delegate key)
-                tlk         (.-l ^Node target-node)
                 trk         (.-r ^Node target-node)
                 income-node (make-node k v key trk)
                 target-node (-> target-node
@@ -737,7 +730,6 @@
               (assoc-before* key k v make-linked-map assoc-fn dissoc-fn))
           (let [target-node (get delegate key)
                 tlk         (.-l ^Node target-node)
-                trk         (.-r ^Node target-node)
                 income-node (make-node k v tlk key)
                 delegate    (-> delegate
                                 (update* assoc-fn tlk update-node-right k)
