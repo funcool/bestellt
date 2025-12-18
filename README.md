@@ -1,16 +1,14 @@
 # Bestellt
 
-Map and Set structures that rememeber the insertion order of its
-elements, even after multiple assoc and dissoc. For Clojure and
-ClojureScript.
+Map and Set data structures that remember the insertion order of their
+elements, even after multiple `assoc` and `dissoc` operations. Available
+for Clojure and ClojureScript.
 
-Fork of [linked](https://github.com/frankiesardo/linked)
-
-
+This is a fork of [linked](https://github.com/frankiesardo/linked).
 
 ## Install
 
-```
+```clj
 funcool/bestellt
 {:git/tag "1.0.0-ALPHA1"
  :git/sha "18bb1d5"
@@ -57,34 +55,33 @@ funcool/bestellt
 
 ## Performance
 
-In the same way as the [linked][1], the bestellt implementation of Map
-and Set are based on the double-linked structures. Behind the scenes
-it uses the default hash-map for store the nodes.
+In the same way as [linked][1], the `bestellt` implementations of Map and
+Set are based on doubly linked structures. Internally, they use the
+default hash-map to store the nodes.
 
-These data structures wrap a normal `hash-map` but instead of feeding
-it a normal `[key value]` pair their remeber a `[key value left-key
-right-key]` record.
+These data structures wrap a normal `hash-map`, but instead of storing a
+simple `[key value]` pair, they store a record of the form
+`[key value left-key right-key]`.
 
-When an item is added, removed or updated on the data structure, it is
-sufficient to update the value or the left and right references.  This
-implementation yields the same Big O time and space complexity of a
-standard `hash-map` (altought effective performance will be slower by
-a constant factor).
+When an item is added, removed, or updated in the data structure, it is
+sufficient to update the value or the left and right references. This
+implementation yields the same Big-O time and space complexity as a
+standard `hash-map`, although effective performance is slower by a
+constant factor.
 
-## Comaprison with [linked][1]
+## Comparison with [linked][1]
 
-The main idea behind the fork is add performance and efficiency
-enhacements and allow nativelly relative operations such that
-`assoc-after`, `assoc-before` and `rename-key`.
+The main motivation behind this fork is to improve performance and
+efficiency, and to natively support relative operations such as
+`assoc-after`, `assoc-before`, and `rename-key`.
 
-Bestellt also implements transients (only for maps for now, transient
-support for sets is in development)
-
+Bestellt also implements transients (currently only for maps; transient
+support for sets is still in development).
 
 ### Benchmarks
 
-Here we have some benchmark comparing the same operation between
-[linked][1], bestellt and native unordered clojure hash-maps.
+Below are some benchmarks comparing the same operations between
+[linked][1], `bestellt`, and native unordered Clojure hash-maps.
 
 **reduce-kv**
 
@@ -152,7 +149,6 @@ Execution time sample std-deviation : 5.311423 ns
                    Overhead used : 1.599203 ns
 ```
 
-
 **equality of big maps**
 
 ```
@@ -184,17 +180,15 @@ Execution time sample std-deviation : 3.334755 ns
    Execution time lower quantile : 202.983709 ns ( 2.5%)
    Execution time upper quantile : 210.572522 ns (97.5%)
                    Overhead used : 1.599203 ns
-
 ```
-
 
 **assoc-before**
 
-The `assoc-before` is not nativelly supported so it is emulated with
-basic map and seq manipulation. I use a sample implementation using
-`reduce-kv`.
+The `assoc-before` operation is not natively supported in `linked`, so
+it is emulated using basic map and sequence manipulation. The following
+sample implementation uses `reduce-kv`.
 
-The implementation used for this case is:
+Implementation used in this case:
 
 ```clojure
 (defn assoc-before
@@ -213,7 +207,7 @@ The implementation used for this case is:
         m'))))
 ```
 
-The result:
+Results:
 
 ```
 user=> (bench-assoc-before)
@@ -239,11 +233,10 @@ Execution time sample std-deviation : 14.728219 ns
 
 ## License
 
-Copyright © 2024-Now Andrey Antukh
+Copyright © 2024–Now Andrey Antukh
 Copyright © 2014 Frankie Sardo
 
 Distributed under the Eclipse Public License either version 1.0 or (at
 your option) any later version.
-
 
 [1]: https://github.com/frankiesardo/linked
