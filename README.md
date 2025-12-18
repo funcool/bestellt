@@ -10,8 +10,12 @@ Fork of [linked](https://github.com/frankiesardo/linked)
 
 ## Install
 
-TBD
-
+```
+funcool/bestellt
+{:git/tag "1.0.0-ALPHA1"
+ :git/sha "18bb1d5"
+ :git/url "https://github.com/funcool/bestellt"}
+```
 
 ## Getting Started
 
@@ -242,4 +246,4 @@ Distributed under the Eclipse Public License either version 1.0 or (at
 your option) any later version.
 
 
-[1](https://github.com/frankiesardo/linked)
+[1]: https://github.com/frankiesardo/linked
