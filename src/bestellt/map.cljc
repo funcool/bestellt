@@ -1,5 +1,5 @@
 (ns bestellt.map
-  (:refer-clojure :exclude [map map?])
+  (:refer-clojure :exclude [map map? assoc update-in])
   (:require [clojure.string :as string]
             [clojure.core :as c]
             #?(:cljs [cljs.reader :as reader]))
@@ -195,7 +195,7 @@
      (assocEx [this k v]
        (if (.containsKey this k)
          (throw (RuntimeException. "Key already present"))
-         (assoc this k v)))
+         (c/assoc this k v)))
      (without [this k]
        (dissoc* this k make-linked-map c/assoc c/dissoc))
 
@@ -557,7 +557,7 @@
 #?(:clj
    (defmethod print-dup Node
      [o ^java.io.Writer writer]
-     (.write writer (str "#bestellt/node [" (key o) " " (val o) "]"))))
+     (.write writer (str "#bestellt/node [" (key o) " " (val o) " " (.-l ^Node o) " " (.-r ^Node o) "]"))))
 
 (defn- equiv-sequential
   [x y]
@@ -856,7 +856,7 @@
 
 (defn map
   ([] empty-map)
-  ([& kvpairs] (apply assoc empty-map kvpairs)))
+  ([& kvpairs] (apply c/assoc empty-map kvpairs)))
 
 (defn map?
   [o]
@@ -911,20 +911,26 @@
          (throw (new #?(:clj IllegalArgumentException :cljs js/Error)
                      "assoc-before expects even number of arguments")))))))
 
-;; (defn assoc1
-;;   ([m k v]
-;;    (clojure.lang.RT/assoc m k v))
-;;   ([m k v & kv]
-;;    (loop [m  (clojure.lang.RT/assoc m k v)
-;;           kv (seq kv)
-;;           k  nil]
-;;      (if-let [r (first kv)]
-;;        (if (nil? k)
-;;          (recur m (rest kv) r)
-;;          (recur (clojure.lang.RT/assoc m k r) (rest kv) nil))
-;;        (if (nil? k)
-;;          m
-;;          (throw (IllegalArgumentException.
-;;                  "assoc-after expects even number of arguments")))))))
+
+(defn assoc
+  ([o k v]
+   (c/assoc (or o empty-map) k v))
+  ([o k1 v1 k2 v2]
+   (c/assoc (or o empty-map) k1 v1 k2 v2))
+  ([o k1 v1 k2 v2 k3 v3]
+   (c/assoc (or o empty-map) k1 v1 k2 v2 k3 v3))
+  ([o k1 v1 k2 v2 k3 v3 k4 v4]
+   (c/assoc (or o empty-map) k1 v1 k2 v2 k3 v3 k4 v4))
+  ([o k1 v1 k2 v2 k3 v3 k4 v4 & other]
+   (apply c/assoc (or o empty-map) k1 v1 k2 v2 k3 v3 k4 v4 other)))
+
+(defn update-in
+  [m ks f & args]
+  (let [up (fn up [m ks f args]
+             (let [[k & ks] ks]
+               (if ks
+                 (assoc m k (up (get m k) ks f args))
+                 (assoc m k (apply f (get m k) args)))))]
+    (up m ks f args)))
 
 #?(:cljs (reader/register-tag-parser! 'bestellt/map ->map))
