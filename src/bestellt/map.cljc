@@ -677,9 +677,7 @@
 
 (defn- assoc-after*
   [this key k v make-linked-map assoc-fn dissoc-fn]
-  (let [head     (-get-head this)
-        delegate (-get-delegate this)]
-
+  (let [delegate (-get-delegate this)]
     (if (empty? delegate)
       (make-linked-map k (assoc-fn delegate k (make-node k v k k)))
       (if (contains? delegate key)
@@ -688,6 +686,7 @@
               (assoc-after* key k v make-linked-map assoc-fn dissoc-fn))
 
           (let [target-node (get delegate key)
+                head        (-get-head this)
                 trk         (.-r ^Node target-node)
                 income-node (make-node k v key trk)
                 target-node (-> target-node
@@ -702,7 +701,14 @@
             (make-linked-map head delegate)))
 
         (if (nil? key)
-          (let [target-node (get delegate head)
+          (let [this        (if (contains? delegate k)
+                              (dissoc* this k make-linked-map assoc-fn dissoc-fn)
+                              this)
+
+                delegate    (-get-delegate this)
+                head        (-get-head this)
+
+                target-node (get delegate head)
                 tlk         (.-l ^Node target-node)
                 trk         (.-r ^Node target-node)
                 income-node (make-node k v tlk head)

@@ -237,8 +237,8 @@
 
 (t/deftest assoc-after-1
   (let [data   (-> bmap/empty-map
-                 (assoc :a 1)
-                 (assoc :b 2))
+                   (assoc :a 1)
+                   (assoc :b 2))
         result (bmap/assoc-after data :a :c 0)]
     (t/is (= 2 (count data)))
     (t/is (= 3 (count result)))
@@ -247,8 +247,8 @@
 
 (t/deftest assoc-after-2
   (let [data   (-> bmap/empty-map
-                 (assoc :a 1)
-                 (assoc :b 2))
+                   (assoc :a 1)
+                   (assoc :b 2))
         result (bmap/assoc-after data nil :c 0)]
     (t/is (= 2 (count data)))
     (t/is (= 3 (count result)))
@@ -257,18 +257,30 @@
 
 (t/deftest assoc-after-3
   (let [data   (-> bmap/empty-map
-                 (assoc :a 1)
-                 (assoc :b 2))
+                   (assoc :a 1)
+                   (assoc :b 2))
         result (bmap/assoc-after data :b :c 0)]
     (t/is (= 2 (count data)))
     (t/is (= 3 (count result)))
     (t/is (= [:a :b :c] (keys result)))
     (t/is (= [1 2 0] (vals result)))))
 
+
+(t/deftest assoc-after-4
+  (let [data   (-> bmap/empty-map
+                   (assoc :a 1)
+                   (assoc :b 2)
+                   (assoc :c 3))
+        result (bmap/assoc-after data nil :c 0)]
+    (t/is (= 3 (count data)))
+    (t/is (= 3 (count result)))
+    (t/is (= [:c :a :b] (keys result)))
+    (t/is (= [0 1 2] (vals result)))))
+
 (t/deftest assoc-before-1
   (let [data   (-> bmap/empty-map
-                 (assoc :a 1)
-                 (assoc :b 2))
+                   (assoc :a 1)
+                   (assoc :b 2))
         result (bmap/assoc-before data :a :c 0)]
     (t/is (= 2 (count data)))
     (t/is (= 3 (count result)))
@@ -277,8 +289,8 @@
 
 (t/deftest assoc-before-2
   (let [data   (-> bmap/empty-map
-                 (assoc :a 1)
-                 (assoc :b 2))
+                   (assoc :a 1)
+                   (assoc :b 2))
         result (bmap/assoc-before data nil :c 0)]
     (t/is (= 2 (count data)))
     (t/is (= 3 (count result)))
@@ -287,8 +299,8 @@
 
 (t/deftest assoc-before-3
   (let [data   (-> bmap/empty-map
-                 (assoc :a 1)
-                 (assoc :b 2))
+                   (assoc :a 1)
+                   (assoc :b 2))
         result (bmap/assoc-before data :b :c 0)]
     (t/is (= 2 (count data)))
     (t/is (= 3 (count result)))
