@@ -712,14 +712,18 @@
                 tlk         (.-l ^Node target-node)
                 trk         (.-r ^Node target-node)
                 income-node (make-node k v tlk head)
+
                 target-node (-> target-node
                                 (update-node-left k)
                                 (cond-> (= trk head)
                                   (update-node-right k)))
+
                 delegate    (-> delegate
-                                (update* assoc-fn trk update-node-right k)
+                                (cond-> (= trk head)
+                                  (update* assoc-fn trk update-node-right k))
                                 (assoc-fn head target-node)
                                 (assoc-fn k income-node))]
+
             (make-linked-map k delegate))
           this)))))
 
@@ -744,7 +748,9 @@
                 head        (if (= key head) k head)]
             (make-linked-map head delegate)))
         (if (nil? key)
-          (assoc* this k v make-linked-map assoc-fn)
+          (-> this
+              (dissoc* k make-linked-map assoc-fn dissoc-fn)
+              (assoc* k v make-linked-map assoc-fn))
           this)))))
 
 (defn- rename-key*

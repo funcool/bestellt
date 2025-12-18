@@ -277,6 +277,19 @@
     (t/is (= [:c :a :b] (keys result)))
     (t/is (= [0 1 2] (vals result)))))
 
+
+(t/deftest assoc-after-5
+  (let [data   (-> bmap/empty-map
+                   (assoc :a 1)
+                   (assoc :b 2)
+                   (assoc :c 3))
+        result (bmap/assoc-after data nil :d 0)]
+    (t/is (= 3 (count data)))
+    (t/is (= 4 (count result)))
+    (t/is (= [:d :a :b :c] (keys result)))
+    (t/is (= [0 1 2 3] (vals result)))))
+
+
 (t/deftest assoc-before-1
   (let [data   (-> bmap/empty-map
                    (assoc :a 1)
@@ -306,4 +319,26 @@
     (t/is (= 3 (count result)))
     (t/is (= [:a :c :b] (keys result)))
     (t/is (= [1 0 2] (vals result)))))
+
+(t/deftest assoc-before-4
+  (let [data   (-> bmap/empty-map
+                   (assoc :a 1)
+                   (assoc :b 2)
+                   (assoc :c 3))
+        result (bmap/assoc-before data nil :a 0)]
+    (t/is (= 3 (count data)))
+    (t/is (= 3 (count result)))
+    (t/is (= [:b :c :a] (keys result)))
+    (t/is (= [2 3 0] (vals result)))))
+
+(t/deftest assoc-before-5
+  (let [data   (-> bmap/empty-map
+                   (assoc :a 1)
+                   (assoc :b 2)
+                   (assoc :c 3))
+        result (bmap/assoc-before data nil :d 0)]
+    (t/is (= 3 (count data)))
+    (t/is (= 4 (count result)))
+    (t/is (= [:a :b :c :d] (keys result)))
+    (t/is (= [1 2 3 0] (vals result)))))
 
